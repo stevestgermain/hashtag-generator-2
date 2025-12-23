@@ -1,15 +1,18 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { HashtagResult } from "../types";
 
-// Safely retrieve API key to prevent browser crashes if process is undefined
-const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env.API_KEY;
-  }
-  return '';
-};
+// Attempt to retrieve the API Key. 
+// We use a try-catch block to handle cases where 'process' might not be defined 
+// but the bundler (like Vite/Webpack) performs a direct string replacement on 'process.env.API_KEY'.
+let apiKey = '';
+try {
+  // @ts-ignore - process might be undefined in browser, but bundlers replace this string.
+  apiKey = process.env.API_KEY || '';
+} catch (e) {
+  console.warn("Environment variable process.env.API_KEY could not be accessed directly.");
+}
 
-const apiKey = getApiKey();
+// Initialize the AI client
 const ai = new GoogleGenAI({ apiKey });
 
 const responseSchema: Schema = {
@@ -48,7 +51,9 @@ const responseSchema: Schema = {
 
 export const generateHashtags = async (description: string): Promise<HashtagResult> => {
   if (!apiKey) {
-    throw new Error("API Key is missing. Please add 'API_KEY' to your environment variables.");
+    throw new Error(
+      "API Key is missing. If you are on Vercel: 1) Ensure you have added 'API_KEY' (or 'VITE_API_KEY') to Environment Variables. 2) REDEPLOY your project for changes to take effect."
+    );
   }
 
   const prompt = `
@@ -82,7 +87,6 @@ export const generateHashtags = async (description: string): Promise<HashtagResu
     return JSON.parse(text) as HashtagResult;
   } catch (error) {
     console.error("Gemini Generation Error:", error);
-    // Re-throw with clear message if it's not the API key error
     if (error instanceof Error) throw error;
     throw new Error("An unexpected error occurred while generating hashtags.");
   }
