@@ -1,32 +1,55 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { HashtagResult } from "../types";
 
-// Robustly attempt to retrieve the API Key from various environment variable patterns.
-// This handles Vite (import.meta.env), CRA (process.env.REACT_APP_), and standard Node/Next.js (process.env).
-let apiKey = '';
+// Helper function to safely find the API key.
+// We check each variable explicitly (statically) so bundlers like Vite and Webpack
+// can perform build-time string replacement.
+const getApiKey = (): string => {
+  let key = '';
 
-try {
-  // 1. Try Vite-style import.meta.env
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
+  // 1. Check Vite-specific (import.meta.env)
+  try {
     // @ts-ignore
-    apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      // @ts-ignore
+      if (import.meta.env.VITE_API_KEY) key = import.meta.env.VITE_API_KEY;
+      // @ts-ignore
+      else if (import.meta.env.API_KEY) key = import.meta.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore errors if import.meta is not defined
   }
 
-  // 2. If not found, try process.env (Standard, CRA, Next.js)
-  // @ts-ignore
-  if (!apiKey && typeof process !== 'undefined' && process.env) {
-    // @ts-ignore
-    apiKey = process.env.API_KEY || process.env.REACT_APP_API_KEY || process.env.VITE_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
+  // 2. If no key found yet, check standard process.env
+  // We use individual try/catches to prevent ReferenceErrors if 'process' is undefined
+  if (!key) {
+    try {
+      // @ts-ignore
+      if (process.env.REACT_APP_API_KEY) key = process.env.REACT_APP_API_KEY;
+    } catch (e) {}
   }
-} catch (e) {
-  console.warn("Could not read environment variables:", e);
-}
+  
+  if (!key) {
+    try {
+      // @ts-ignore
+      if (process.env.NEXT_PUBLIC_API_KEY) key = process.env.NEXT_PUBLIC_API_KEY;
+    } catch (e) {}
+  }
 
-// Initialize the AI client
-// Note: We initialize this lazily with a fallback to ensure the app doesn't crash on load.
-// The real check happens inside generateHashtags.
-const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-for-init' });
+  if (!key) {
+    try {
+      // @ts-ignore
+      if (process.env.API_KEY) key = process.env.API_KEY;
+    } catch (e) {}
+  }
+
+  return key;
+};
+
+const apiKey = getApiKey();
+
+// Initialize with the found key (or a placeholder to prevent immediate crash)
+const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
 
 const responseSchema: Schema = {
   type: Type.OBJECT,
@@ -63,10 +86,11 @@ const responseSchema: Schema = {
 };
 
 export const generateHashtags = async (description: string): Promise<HashtagResult> => {
-  // Check specifically for the key here to provide a helpful error message at runtime
-  if (!apiKey || apiKey === 'dummy-key-for-init') {
+  // Runtime check: If the key is still missing, throw a helpful error.
+  if (!apiKey || apiKey === 'dummy-key') {
+    console.error("Debug: Environment variables checked. None found.");
     throw new Error(
-      "API Key is missing. Please set 'VITE_API_KEY' (for Vite) or 'REACT_APP_API_KEY' (for Create React App) in your Vercel Environment Variables and REDEPLOY."
+      "API Key is missing. The app checked for 'VITE_API_KEY', 'REACT_APP_API_KEY', and 'API_KEY'. None were found. Please check your Vercel Project Settings > Environment Variables."
     );
   }
 
