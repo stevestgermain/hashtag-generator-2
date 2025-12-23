@@ -1,7 +1,15 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { HashtagResult } from "../types";
 
-const apiKey = process.env.API_KEY || '';
+// Safely retrieve API key to prevent browser crashes if process is undefined
+const getApiKey = () => {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.API_KEY;
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey });
 
 const responseSchema: Schema = {
@@ -40,7 +48,7 @@ const responseSchema: Schema = {
 
 export const generateHashtags = async (description: string): Promise<HashtagResult> => {
   if (!apiKey) {
-    throw new Error("API Key is missing. Please check your environment configuration.");
+    throw new Error("API Key is missing. Please add 'API_KEY' to your environment variables.");
   }
 
   const prompt = `
@@ -74,6 +82,8 @@ export const generateHashtags = async (description: string): Promise<HashtagResu
     return JSON.parse(text) as HashtagResult;
   } catch (error) {
     console.error("Gemini Generation Error:", error);
-    throw error;
+    // Re-throw with clear message if it's not the API key error
+    if (error instanceof Error) throw error;
+    throw new Error("An unexpected error occurred while generating hashtags.");
   }
 };

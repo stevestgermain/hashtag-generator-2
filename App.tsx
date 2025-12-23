@@ -19,11 +19,12 @@ const App: React.FC = () => {
     setResult(null);
 
     try {
-      // Platform argument removed
       const data = await generateHashtags(description);
       setResult(data);
     } catch (err) {
-      setError("Failed to generate hashtags. Please try again.");
+      console.error(err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to generate hashtags. Please try again.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +75,7 @@ const App: React.FC = () => {
 
           {/* Error Message */}
           {error && (
-            <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm border border-red-100 text-center">
+            <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm border border-red-100 text-center break-words">
               {error}
             </div>
           )}
