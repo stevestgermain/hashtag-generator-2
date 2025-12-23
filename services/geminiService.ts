@@ -1,19 +1,32 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { HashtagResult } from "../types";
 
-// Attempt to retrieve the API Key. 
-// We use a try-catch block to handle cases where 'process' might not be defined 
-// but the bundler (like Vite/Webpack) performs a direct string replacement on 'process.env.API_KEY'.
+// Robustly attempt to retrieve the API Key from various environment variable patterns.
+// This handles Vite (import.meta.env), CRA (process.env.REACT_APP_), and standard Node/Next.js (process.env).
 let apiKey = '';
+
 try {
-  // @ts-ignore - process might be undefined in browser, but bundlers replace this string.
-  apiKey = process.env.API_KEY || '';
+  // 1. Try Vite-style import.meta.env
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+  }
+
+  // 2. If not found, try process.env (Standard, CRA, Next.js)
+  // @ts-ignore
+  if (!apiKey && typeof process !== 'undefined' && process.env) {
+    // @ts-ignore
+    apiKey = process.env.API_KEY || process.env.REACT_APP_API_KEY || process.env.VITE_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
+  }
 } catch (e) {
-  console.warn("Environment variable process.env.API_KEY could not be accessed directly.");
+  console.warn("Could not read environment variables:", e);
 }
 
 // Initialize the AI client
-const ai = new GoogleGenAI({ apiKey });
+// Note: We initialize this lazily with a fallback to ensure the app doesn't crash on load.
+// The real check happens inside generateHashtags.
+const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-for-init' });
 
 const responseSchema: Schema = {
   type: Type.OBJECT,
@@ -50,9 +63,10 @@ const responseSchema: Schema = {
 };
 
 export const generateHashtags = async (description: string): Promise<HashtagResult> => {
-  if (!apiKey) {
+  // Check specifically for the key here to provide a helpful error message at runtime
+  if (!apiKey || apiKey === 'dummy-key-for-init') {
     throw new Error(
-      "API Key is missing. If you are on Vercel: 1) Ensure you have added 'API_KEY' (or 'VITE_API_KEY') to Environment Variables. 2) REDEPLOY your project for changes to take effect."
+      "API Key is missing. Please set 'VITE_API_KEY' (for Vite) or 'REACT_APP_API_KEY' (for Create React App) in your Vercel Environment Variables and REDEPLOY."
     );
   }
 
